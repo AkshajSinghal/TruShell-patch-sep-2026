@@ -1,44 +1,120 @@
 # Contributing to TruShell
 
-Welcome — we value your time and contributions. This document explains how to contribute, how we review work, and how to become a trusted committer.
+Thanks for looking. This is a small project and every bit of help counts,
+including bug reports and reading code. You don't need to be a shell
+expert. Being careful helps more than being clever.
 
-Table of contents
-- Quickstart (first-time contributors)
-- How to file issues
-- How to contribute code (PR process)
-- Trusted committer path
-- Mentorship & pairing
-- Communication channels
-- Security & reporting
+<!-- NOTE FOR MAINTAINERS: this is a draft written without seeing the
+     current CONTRIBUTING.md. Diff it against the old one and keep
+     anything the old one requires that this one doesn't mention
+     (sign-off, license terms, coding rules). -->
 
-Quickstart
-1. Read CODE_OF_CONDUCT.md and GOVERNANCE.md.
-2. Pick a "good-first-issue" or follow the New Contributor Checklist (NEW_CONTRIBUTOR_CHECKLIST.md).
-3. Open a draft PR referencing an issue; add the checklist in the PR template; run tests locally and in CI.
 
-How to file issues
-- Use the issue templates (bug vs feature) under .github/ISSUE_TEMPLATE.
-- Provide reproduction steps, environment, and a minimal log/trace.
+## Start here
 
-How to contribute code
-- Create an issue first for non-trivial work. Small fixes may open PRs but prefer an issue.
-- Branch naming: feature/<short-desc>, fix/<short-desc>, chore/<short-desc>, docs/<short-desc>.
-- PR must include: linked issue (or a short explanation), tests, changelog entry (if applicable), and the checklist in the PR template.
-- CI must be green. New contributors' PRs are routed to the mentorship queue for at least one review by a core maintainer.
-- Merges to protected branches require two human reviews and passing CI; critical subsystems require explicit core maintainer approval.
+1. Read the README, especially "Status, plainly". It's short.
+2. Skim [`trushell-issues.md`](trushell-issues.md). It's our list of
+   known problems. Something on it is probably a good first patch.
+3. Build it and break it before you change it.
 
-Trusted committer path
-- Criteria: 10 merged PRs, demonstrated quality (tests, reviews), at least 1 mentor recommendation, and familiarity with release process.
-- Trusted committers can be granted write access and responsibility for one working group.
+    git clone https://github.com/TruFoundation/TruShell.git
+    cd TruShell
+    cargo build
+    cargo test
 
-Mentorship & pairing
-- New contributors may request pairing sessions or office hours in the community channels.
-- We encourage pair programming for your first 2–3 PRs.
+You need Rust 1.70 or newer.
 
-Communication
-- Primary channels: GitHub (issues/PRs), Discussions (for design), and our chat/Matrix/Discord (see GOVERNANCE.md for links).
 
-Security & reporting
-- Use the security disclosure process documented in GOVERNANCE.md.
+## Picking something to work on
 
-Thank you for contributing to TruShell.
+- Say what you're doing before you do it. Comment on the issue, or in
+  the sprint discussion if there is one, with what you're taking and
+  roughly when you expect a PR. Something like: "Claiming: job control
+  tests, PR in two weeks, @yourhandle".
+- If you're new, say "mentor me" and one of us will pair with you on a
+  first PR.
+- Claims go stale. If you've gone quiet for a few weeks, someone else
+  may pick it up. No hard feelings, life happens.
+- Bigger changes, such as the permission model, language semantics, or
+  anything that changes what an existing input means, need discussion
+  first. Open an issue, describe the problem and what you'd like to do,
+  and wait for a reply before writing 2000 lines. It saves you a
+  weekend.
+
+
+## What a good patch looks like
+
+- One logical change per PR. If you find an unrelated bug on the way,
+  fix it separately.
+- Explain why, not just what. The diff shows what changed. Only you can
+  say why it needed to change.
+- Add a test. If you fix a bug, the test should fail without your fix.
+  If you add a feature, test the odd cases too: empty input, quotes,
+  spaces in names, non-UTF-8 bytes.
+- Don't reformat code you aren't otherwise changing. It buries the real
+  change.
+- Run these before you push, and keep the tree warning-free:
+
+      cargo fmt
+      cargo clippy --all-targets
+      cargo test
+
+- Update the docs in the same PR if you change behaviour a user can see.
+  If you fixed something listed in `trushell-issues.md`, remove the entry.
+- Keep it portable. Linux is what we test on, but don't assume it
+  where you don't have to.
+
+
+## Commit messages
+
+Start with the part of the tree you touched, then a short summary:
+
+    parser: reject unterminated quotes with a line number
+    exec: reset SIGPIPE to default in child processes
+
+If the reason isn't obvious, say it in the body, wrapped at about 72
+columns. Mention the issue number. We aren't strict about this. A clear
+message beats a perfectly formatted vague one.
+
+
+## Review
+
+Somebody will read your PR and probably ask questions or ask for
+changes. That's normal, and it's about the patch, not about you. We do
+the same to each other.
+
+Reviews from people who aren't maintainers are welcome and useful.
+"I read this and here's what I didn't understand" is a real
+contribution.
+
+We may say no. Usually that's because the change doesn't fit the goals
+in the README, in which case we'll try to point you to a better place for
+it, often a plugin.
+
+
+## Reporting bugs
+
+Open an issue. Please include:
+
+- the commit you built from (`git rev-parse HEAD`)
+- your OS and kernel (`uname -a`) and the terminal you use
+- the exact input, the output you got, and the output you expected
+- whether it still happens with no config file
+
+Run with `RUST_BACKTRACE=1` if it crashes and paste the backtrace.
+
+Security bugs don't go in public issues. See [`SECURITY.md`](SECURITY.md).
+
+
+## Other ways to help
+
+- Try TruShell as your everyday prompt for a few hours (not as your
+  login shell) and tell us what annoyed you.
+- Write test cases: odd scripts, odd file names, odd terminals.
+- Improve the docs, or point out where they're wrong. They probably are.
+- Review other people's PRs.
+
+
+## Behaviour
+
+Be decent. See [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
