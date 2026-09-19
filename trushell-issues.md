@@ -67,6 +67,22 @@ bridge (M4). Docs and release plumbing run alongside (M5). A feature that
 does not help one of those three goals is probably a plugin.
 
 
+## What v3 already did
+
+The v3 sprint (July 8 to August 9, 2026) closed out this checklist, per
+the sprint discussion and the v3 release notes: POSIX spec and
+acceptance tests; parser and executor for pipelines and redirects; job
+control and signal handling; a PTY abstraction with a Linux backend; a
+terminal emulator core; a WASM host with a capability model and example
+plugins; a dotfile importer and compatibility linter; a CI acceptance
+harness and Linux packages.
+
+Merged is not the same as audited. Many entries below are about
+checking, hardening and documenting what the sprint landed, not
+starting from scratch. Entries marked "unconfirmed" are still inferred
+from documents and haven't been reproduced against the code.
+
+
 ## Index
 
     M0 housekeeping
@@ -82,7 +98,7 @@ does not help one of those three goals is probably a plugin.
       TS-008  lang: no functions, scoping undefined
       TS-009  exec: no error model
       TS-010  exec: pipeline status, SIGPIPE, stderr ordering
-      TS-011  exec: no job control
+      TS-011  exec: job control merged in v3, needs auditing
       TS-012  exec: signals, zombies, terminal state on exit
       TS-013  expand: globbing, tilde, env, command substitution
       TS-014  builtins: only cd and exit are specified
@@ -91,7 +107,7 @@ does not help one of those three goals is probably a plugin.
       TS-017  test: conformance suite, differential tests, fuzzing
 
     M2 security model
-      TS-018  sec: capability model needs an RFC before code
+      TS-018  sec: plugin capability model undocumented; extending it needs an RFC
       TS-019  sec: capabilities are not enforced on child processes
       TS-020  sec: --allow / --deny and script permission headers
       TS-021  plugin: capabilities too coarse, API not versioned
@@ -109,10 +125,10 @@ does not help one of those three goals is probably a plugin.
 
     M4 compatibility
       TS-031  compat: no way to run sh/bash scripts safely
-      TS-032  compat: no lint or migration report
+      TS-032  compat: linter and dotfile importer exist; scope unclear
 
     M5 release and docs
-      TS-033  release: no tagged releases, packaging status unclear
+      TS-033  release: releases exist; packaging and signing unverified
       TS-034  docs: no man page, no language reference
 
 
@@ -139,7 +155,7 @@ says who can change it.
 
 ### TS-002  docs: POSIX_COMPATIBILITY_SPEC.md claims too much
 
-Kind: doc   Severity: high   Status: open
+Kind: doc   Severity: high   Status: in progress
 
 The file covers four behaviours: `cd` with no argument, quoting of
 arguments to external commands, `exit`, and fallback to external
@@ -148,9 +164,12 @@ the whole Shell Command Language: lists, redirections, parameter
 expansion, special builtins, and so on. We do not have that, and a
 reader of the file name would assume we do.
 
-Fix: rename to docs/design/minimal-shell-behaviour.md (leave a stub at
-the old path for one release). Add docs/compat/posix-matrix.md with one
-row per feature marked supported / partial / planned / wontfix.
+Status of the fix: the spec now opens with a plain statement of its
+scope and lists what it does not cover. The v3 sprint also added
+acceptance tests for the four behaviours. Still to do: add
+docs/compat/posix-matrix.md with one row per feature marked supported /
+partial / planned / wontfix. Renaming the file is optional; decide after
+checking whether the tests refer to it by name.
 
 Done when: the word "POSIX" only appears where the matrix says
 "supported".
@@ -160,7 +179,8 @@ Done when: the word "POSIX" only appears where the matrix says
 
 Kind: design   Severity: low   Status: open
 
-Task create/list/complete and time start/stop/log are applications. In
+These are leftovers from the Python-era productivity shell. Task
+create/list/complete and time start/stop/log are applications, and in
 core they drag in a database schema and a migration story for something
 that is not why anyone installs a shell. Everything in core has to be
 secured and maintained by us.
@@ -178,7 +198,10 @@ code moved to examples/plugins/ or removed.
 Kind: infra   Severity: medium   Status: unconfirmed
 
 There is a .github directory and the README says "ensure CI passes", but
-we have not written down what it covers. A shell behaves differently per
+we have not written down what it covers. The v3 sprint added a Linux
+package-build workflow and an acceptance test script, so it isn't empty;
+the question is whether fmt, clippy and the tests run on every PR. A
+shell behaves differently per
 OS (process groups, terminals, signals), so a Linux-only run is not
 enough. The README also states Rust 1.70 as the minimum; nothing we know
 of tests that.
@@ -208,6 +231,10 @@ A syntax error turns into a PATH lookup. `let x = 1 +` ends up as
 place. Worse, what a line means now depends on what happens to be in
 $PATH. Two machines, same script, different behaviour. We would not
 accept that from anyone else's shell.
+
+This path has already produced one security bug: a shell injection in
+the OS fallback, fixed earlier (PR #55). One fix doesn't make the design
+safe.
 
 Fix: decide the mode from the first token. Reserved words (`let`, `if`,
 `for`, `while`, `fn`, `match`, `return`, ...) start language mode.
@@ -335,14 +362,17 @@ Done when: `yes | head -1` exits cleanly with no message, and a 3-stage
 pipeline moving more than 64 KiB does not hang.
 
 
-### TS-011  exec: no job control
+### TS-011  exec: job control merged in v3, needs auditing
 
-Kind: missing   Severity: high   Status: unconfirmed
+Kind: verify   Severity: high   Status: open, unconfirmed
 
-Without process groups and terminal ownership, Ctrl-C kills the shell
-along with the child, Ctrl-Z does nothing useful, and `&` cannot work.
+Job control and signal handling were merged in v3 (PR #89). Good. Now we
+need to know whether it holds up. Without correct process groups and
+terminal ownership, Ctrl-C kills the shell along with the child, Ctrl-Z
+does nothing useful, and `&` misbehaves. Nobody has tested this under a
+real PTY on more than one terminal yet.
 
-Fix: one process group per pipeline (`setpgid`), foreground group owns
+What it should do: one process group per pipeline (`setpgid`), foreground group owns
 the terminal (`tcsetpgrp`), shell takes it back after. `jobs`, `fg`,
 `bg`, `wait`, trailing `&`. The shell ignores SIGINT, SIGTSTP, SIGTTIN
 and SIGTTOU for itself and restores default in children. Only when stdin
@@ -354,9 +384,10 @@ interesting bug. Manual checklist goes in tests/manual/jobcontrol.md.
 
 ### TS-012  exec: signals, zombies, terminal state on exit
 
-Kind: bug   Severity: high   Status: unconfirmed
+Kind: verify   Severity: high   Status: open, unconfirmed
 
-A shell that does not reap children leaves zombies. One that mishandles
+Signal handling landed with job control in v3 (PR #89); this entry is
+the checklist for auditing it. A shell that does not reap children leaves zombies. One that mishandles
 signals leaves the terminal in raw mode or hangs on exit. The spec
 promises `exit` will not hang waiting for input; that is the easy part.
 
@@ -488,15 +519,17 @@ Every fixed bug adds a regression test. That goes in CONTRIBUTING.
 M2: security model
 ===========================================================================
 
-### TS-018  sec: capability model needs an RFC before code
+### TS-018  sec: plugin capability model undocumented; extending it needs an RFC
 
 Kind: design   Severity: blocker   Status: needs design
 
-The WASM plugin host has capabilities (`logging`, `environment-get`).
-Nothing else in the shell does. A script or command launched from
-TruShell can do anything the user can. If "safe by default" is going to
-mean something, the model gets designed first, or the enforcement gets
-written twice.
+The v3 sprint shipped a WASM plugin host with a capability model
+(today the documented capabilities are `logging` and `environment-get`).
+We haven't written down how that model is designed or what it promises.
+Nothing else in the shell has capabilities: a script or command launched
+from TruShell can do anything the user can. If "safe by default" is
+going to mean something, the model gets written down and reviewed first,
+or the enforcement gets written twice.
 
 The RFC (docs/design/capabilities.md) has to cover:
 
@@ -813,6 +846,11 @@ are sh or bash. A shell that cannot run them stays a curiosity. We are
 not going to reimplement bash (TS-001), and doing so would import its
 problems.
 
+The v3 goal was that scripts written for /bin/sh work here, with a
+fallback when they don't. The compatibility spec covers four behaviours
+(see TS-002), so we're a long way from that, and bash-only features are
+a separate and larger problem.
+
 Instead: `trushell compat sh script.sh` and `trushell compat bash
 script.sh` run the script with the system interpreter, wrapped in the
 sandbox from TS-019. We do not parse it. When TruShell is asked to run a
@@ -829,12 +867,16 @@ runs unchanged, a second run shows it cannot read outside its allowed
 paths, and exit status and signals pass through untouched.
 
 
-### TS-032  compat: no lint or migration report
+### TS-032  compat: linter and dotfile importer exist; scope unclear
 
-Kind: missing   Severity: low   Status: open
+Kind: doc   Severity: low   Status: open, unconfirmed
 
-People with existing scripts want to know how much would change before
-they decide anything. Nothing tells them.
+The v3 sprint added a dotfile importer and a compatibility linter, but
+we haven't documented what either checks. People with existing scripts
+want to know how much would change before they decide anything, so step
+one is writing down what exists and where the gaps are.
+
+What we'd like the tools to cover:
 
 `trushell lint file.tru` checks TruShell code: unused variables,
 shadowing, unreachable code, unchecked command failures, deprecated
@@ -850,16 +892,19 @@ can be silenced with a comment. Exits non-zero on findings unless
 M5: release and docs
 ===========================================================================
 
-### TS-033  release: no tagged releases, packaging status unclear
+### TS-033  release: releases exist; packaging and signing unverified
 
-Kind: infra   Severity: medium   Status: open
+Kind: infra   Severity: medium   Status: open, unconfirmed
 
-Installing today means clone and `cargo build`. There are no tagged
-releases. A packaging/ directory exists and we have not written down what
-state it is in. A shell has to be easy to drop into a container or onto a
-server, or it will not be tried.
+There are tagged releases (v1.0, v1.3, v2 and v3 among them). v3 added a
+CI workflow for Linux package building, an RPM build script and
+packaging notes. What we don't know is whether the packages install
+cleanly on a fresh box, whether releases are signed or checksummed, and
+how much of the process is still manual. A shell has to be easy to drop
+into a container or onto a server, or it will not be tried.
 
-Plan: tagged SemVer releases from CI with release notes. Static binaries
+Plan: SemVer tags built by CI, with release notes (the existing tags
+are v1.0, v1.3, v2, v3, which aren't SemVer). Static binaries
 for x86_64 and aarch64 musl, and macOS. SHA-256 checksums and detached
 signatures (minisign or cosign; pick one and document verification).
 SBOM with each release. Pin the toolchain in rust-toolchain.toml.
@@ -903,9 +948,9 @@ Things we are not going to do
 
   - Bug-for-bug bash compatibility. Use `compat` (TS-031).
   - Windows support, for now.
-  - A GUI, a terminal emulator, or an editor.
+  - A GUI or an editor. The terminal emulator core added in v3 is a
+    separate question we haven't settled.
   - Task management or time tracking in core (TS-003).
-  - Telemetry. TruShell will not phone home.
 
 
 ## Working on these
