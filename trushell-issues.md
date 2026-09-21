@@ -86,7 +86,6 @@ from documents and haven't been reproduced against the code.
 ## Index
 
     M0 housekeeping
-      TS-001  docs: no statement of goals and non-goals
       TS-002  docs: POSIX_COMPATIBILITY_SPEC.md claims too much
       TS-003  roadmap: task and time tracking do not belong in core
       TS-004  ci: we have not audited what CI actually checks
@@ -136,23 +135,6 @@ from documents and haven't been reproduced against the code.
 M0: housekeeping
 ===========================================================================
 
-### TS-001  docs: no statement of goals and non-goals
-
-Kind: doc   Severity: high   Status: open
-
-The README calls TruShell "a general-purpose shell like Bash" and lists
-task management next to it. Nobody reviewing a patch can tell whether it
-is in scope, and nobody can tell whether bug-for-bug bash compatibility
-is something we promise. We should have said this on day one.
-
-Fix: a short goals/non-goals section in README.md, and the reasoning in
-docs/design/goals.md. Non-goals we currently intend: bug-for-bug bash
-compatibility, being a task manager or editor, a GUI.
-
-Done when: README and CONTRIBUTING both point at it, and GOVERNANCE.md
-says who can change it.
-
-
 ### TS-002  docs: POSIX_COMPATIBILITY_SPEC.md claims too much
 
 Kind: doc   Severity: high   Status: in progress
@@ -166,10 +148,9 @@ reader of the file name would assume we do.
 
 Status of the fix: the spec now opens with a plain statement of its
 scope and lists what it does not cover. The v3 sprint also added
-acceptance tests for the four behaviours. Still to do: add
-docs/compat/posix-matrix.md with one row per feature marked supported /
-partial / planned / wontfix. Renaming the file is optional; decide after
-checking whether the tests refer to it by name.
+acceptance tests for the four behaviours. Also recently
+docs/compat/posix-matrix.md was created with one row per feature marked supported /
+partial / planned / wontfix. Still to do: run and test the matrix against a real build.
 
 Done when: the word "POSIX" only appears where the matrix says
 "supported".
