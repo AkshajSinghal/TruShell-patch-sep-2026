@@ -11,7 +11,7 @@ that if it doesn't, we fall back to something that can run it. That is
 where we're going. This file describes where we are.
 
 Feature by feature status is in
-[`posix-matrix.md`](posix-matrix.md). This file
+[`docs/compat/posix-matrix.md`](docs/compat/posix-matrix.md). This file
 covers only the four behaviours below.
 
 
@@ -70,7 +70,7 @@ of them:
 - signal and job-control behaviour as POSIX defines it
 - bash extensions of any kind (`[[ ]]`, arrays, process substitution)
 
-The matrix in [`posix-matrix.md`](posix-matrix.md)
+The matrix in [`docs/compat/posix-matrix.md`](docs/compat/posix-matrix.md)
 lists each of these with a snippet to try and a status. See also TS-002
 in [`trushell-issues.md`](trushell-issues.md).
 
