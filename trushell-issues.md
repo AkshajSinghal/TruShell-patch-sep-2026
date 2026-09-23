@@ -86,9 +86,12 @@ from documents and haven't been reproduced against the code.
 ## Index
 
     M0 housekeeping
+      TS-001  docs: no statement of goals and non-goals
       TS-002  docs: POSIX_COMPATIBILITY_SPEC.md claims too much
       TS-003  roadmap: task and time tracking do not belong in core
       TS-004  ci: we have not audited what CI actually checks
+      TS-035  build: Cargo.toml has an unterminated string, blocks all cargo commands
+      TS-036  ci: ci-packaging.yml is not valid YAML and has never run
 
     M1 core shell
       TS-005  parser: a failed parse runs the line as an external command
@@ -135,6 +138,23 @@ from documents and haven't been reproduced against the code.
 M0: housekeeping
 ===========================================================================
 
+### TS-001  docs: no statement of goals and non-goals
+
+Kind: doc   Severity: high   Status: open
+
+The README calls TruShell "a general-purpose shell like Bash" and lists
+task management next to it. Nobody reviewing a patch can tell whether it
+is in scope, and nobody can tell whether bug-for-bug bash compatibility
+is something we promise. We should have said this on day one.
+
+Fix: a short goals/non-goals section in README.md, and the reasoning in
+docs/design/goals.md. Non-goals we currently intend: bug-for-bug bash
+compatibility, being a task manager or editor, a GUI.
+
+Done when: README and CONTRIBUTING both point at it, and GOVERNANCE.md
+says who can change it.
+
+
 ### TS-002  docs: POSIX_COMPATIBILITY_SPEC.md claims too much
 
 Kind: doc   Severity: high   Status: in progress
@@ -146,14 +166,21 @@ the whole Shell Command Language: lists, redirections, parameter
 expansion, special builtins, and so on. We do not have that, and a
 reader of the file name would assume we do.
 
-Status of the fix: the spec now opens with a plain statement of its
-scope and lists what it does not cover. The v3 sprint also added
-acceptance tests for the four behaviours. Also recently
-docs/compat/posix-matrix.md was created with one row per feature marked supported /
-partial / planned / wontfix. Still to do: run and test the matrix against a real build.
+Status of the fix: the spec opens with a plain statement of its scope
+and lists what it does not cover. docs/compat/posix-matrix.md now has one
+row per feature, each with a snippet to try, and every row starts as
+"unverified". The v3 sprint also added acceptance tests for the four
+behaviours. Still to do: run every row against a real build and record
+the result. Renaming the file is optional; decide after checking whether
+the tests refer to it by name.
 
-Done when: the word "POSIX" only appears where the matrix says
-"supported".
+Done when:
+
+  - the matrix has been run against a real build, with the commit and
+    date recorded at the top, and no row is still "unverified"
+  - the spec names the exact command that runs the acceptance tests
+  - no doc claims POSIX compatibility beyond what the matrix marks
+    "supported" (stating POSIX as a goal is fine)
 
 
 ### TS-003  roadmap: task and time tracking do not belong in core
@@ -176,23 +203,127 @@ code moved to examples/plugins/ or removed.
 
 ### TS-004  ci: we have not audited what CI actually checks
 
-Kind: infra   Severity: medium   Status: unconfirmed
+Kind: infra   Severity: medium   Status: in progress
 
 There is a .github directory and the README says "ensure CI passes", but
 we have not written down what it covers. The v3 sprint added a Linux
 package-build workflow and an acceptance test script, so it isn't empty;
 the question is whether fmt, clippy and the tests run on every PR. A
-shell behaves differently per
-OS (process groups, terminals, signals), so a Linux-only run is not
-enough. The README also states Rust 1.70 as the minimum; nothing we know
-of tests that.
+shell behaves differently per OS (process groups, terminals, signals), so
+a Linux-only run is not enough. The README also states Rust 1.70 as the
+minimum; nothing we know of tests that.
 
-Fix: make sure CI runs `cargo fmt --check`, `cargo clippy -D warnings`
-and `cargo test` on Linux and macOS, on stable and on the declared MSRV.
-Add `cargo audit` and `cargo deny`. Set `rust-version` in Cargo.toml.
+What we found on closer look, and it's worse than "unaudited":
 
-Done when: all of the above run on every PR and are required by branch
-protection. Windows is out of scope for now, and the README says so.
+  - `.github/workflows/ci-packaging.yml` is plain text with a `.yml`
+    name. It has never run as a GitHub Actions workflow. See TS-036.
+  - `.github/workflows/triage.yml` is a real workflow and is fine. It
+    labels PRs; it does not build or test anything.
+  - Cargo.toml has an unterminated string
+    (`portable-pty = "0.10`), so no `cargo` command has ever worked
+    against this manifest as committed. See TS-035. This has to be
+    fixed before any of the below can run at all.
+  - It's a single package, not a workspace. Use plain `cargo test` /
+    `cargo clippy --all-targets`, not `--workspace`.
+  - The real tests are `tests/dotfiles.rs`, `tests/posix_compatibility.rs`,
+    `tests/terminal_emulator.rs`, `tests/wasm_plugin.rs`. `cargo test`
+    picks these up on its own.
+  - The acceptance script is `packaging/acceptance_test.sh`, not
+    `tests/acceptance.sh`. It checks `trushell -c 'echo ...'` against a
+    binary on PATH. Nothing runs it automatically; a workflow has to
+    build the binary, put it on PATH, and call it.
+  - `rust-version` isn't set in Cargo.toml. 1.70 in the README has never
+    actually been tested, since the manifest didn't parse.
+
+Status of the fix: a new `.github/workflows/ci.yml` runs `cargo fmt
+--check`, `cargo clippy --all-targets -D warnings` and `cargo test` on
+Linux and macOS, a separate MSRV job that reads `rust-version` from
+Cargo.toml, an acceptance job that builds the binary and runs
+`packaging/acceptance_test.sh`, plus `cargo audit` and `cargo deny`.
+`.github/workflows/ci-packaging.yml` has been rewritten as real YAML
+(TS-036). `rust-toolchain.toml` and `deny.toml` were added.
+`rust-version` still needs to be set by hand once someone determines the
+real MSRV (see CARGO_TOML_PATCH.md); nobody has been able to build this
+manifest yet to check.
+
+Still to do:
+
+  - fix Cargo.toml's unterminated string first (TS-035), or nothing else
+    in this list can even be attempted
+  - determine the real MSRV (`cargo +1.70.0 build`, or older/newer until
+    one works) and set `rust-version` in Cargo.toml to match
+  - fill in `[package.metadata.deb]` in Cargo.toml so `cargo deb` (used
+    by the packaging workflow) produces a real package
+  - confirm `packaging/build_rpm.sh`'s actual output path and fix the
+    artifact-upload step in ci-packaging.yml to match
+  - run `cargo deny check` for real once the manifest parses, and correct
+    deny.toml's license allow-list against what it actually reports
+  - require the `CI ok` status check in Settings → Branches → main
+
+Done when: fmt, clippy, test (Linux + macOS), the MSRV build, the
+packaging acceptance smoke test, audit and deny all run on every PR
+against a manifest that actually parses, are required by branch
+protection, and Cargo.toml's rust-version matches a Rust version someone
+has actually built successfully. Windows is out of scope for now, and
+the README says so.
+
+---
+
+### TS-035  build: Cargo.toml has an unterminated string, so no cargo command works
+
+Kind: bug   Severity: blocker   Status: open
+
+`[dependencies]` in Cargo.toml has:
+
+    portable-pty = "0.10
+
+The closing quote is missing. TOML can't parse this. As committed,
+`cargo build`, `cargo test`, `cargo clippy`, `cargo fmt --check`, and
+`cargo metadata` all fail immediately with a manifest error, before
+touching any source file. This is not a code bug, a test failure, or a
+missing feature. It means every "done" claim resting on "the tests
+pass" or "CI is green" for this project needs to be treated as
+unverified until this line is fixed, because the tooling that would have
+caught it has apparently never run successfully.
+
+Fix: close the string. Check crates.io for the exact intended version
+(pin a full version like `"0.10.1"` rather than the bare `"0.10"`, since
+whoever wrote this may have meant something more specific and the
+missing quote suggests it wasn't checked carefully).
+
+Done when: `cargo metadata --format-version 1` succeeds, and CI (TS-004)
+runs at least once, for real, against this fix.
+
+This blocks TS-004 entirely and should land first, as its own tiny PR,
+so the fix is easy to review and easy to blame if something downstream
+still looks wrong.
+
+
+### TS-036  ci: ci-packaging.yml is not valid YAML and has never run
+
+Kind: bug   Severity: high   Status: open
+
+`.github/workflows/ci-packaging.yml` is plain text: packaging notes and
+instructions, saved with a `.yml` extension in the workflows directory.
+GitHub Actions requires valid YAML to register a workflow, so this file
+has never executed, regardless of what any PR description or commit
+message said it added. The Linux `.deb`/`.rpm` packaging story is
+currently "described in a comment," not "built by CI."
+
+Fix: the actual workflow steps described in the file's own text (build,
+test, `cargo deb`, `packaging/build_rpm.sh` via fpm, upload artifacts,
+run `packaging/acceptance_test.sh`) need to be written as real YAML.
+Keep the original text as documentation (e.g.
+`packaging/ci-packaging-notes.md`) since it's a reasonable description
+of intent, just not executable.
+
+Done when: `.github/workflows/ci-packaging.yml` parses as YAML, runs on
+a real trigger (tag push is reasonable, since packaging every PR is
+wasted work), and produces a downloadable `.deb` and `.rpm` as build
+artifacts on a test run.
+
+Related: TS-033 (release and packaging status), TS-035 (blocks any build
+this workflow would run).
 
 
 ===========================================================================
@@ -216,6 +347,9 @@ accept that from anyone else's shell.
 This path has already produced one security bug: a shell injection in
 the OS fallback, fixed earlier (PR #55). One fix doesn't make the design
 safe.
+
+<!-- VERIFY: PR #55 is credited to an outside contributor's public
+     profile. Confirm the PR and the wording before publishing. -->
 
 Fix: decide the mode from the first token. Reserved words (`let`, `if`,
 `for`, `while`, `fn`, `match`, `return`, ...) start language mode.
